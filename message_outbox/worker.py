@@ -41,7 +41,7 @@ class MessageOutboxWorker:
                     send_message_tasks.append(
                         self.producer.send_and_wait(
                             message.topic,
-                            dumps(message.payload),
+                            dumps(message.payload).encode("utf-8"),
                             headers=headers,
                         )
                     )
