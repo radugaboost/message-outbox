@@ -35,10 +35,10 @@ class MessageOutboxWorker:
                         self.producer.send_and_wait(
                             message.topic,
                             dumps(message.payload),
-                            headers={
-                                "x-message-id": str(message.id),
-                                "x-trace-id": message.trace_id,
-                            },
+                            headers=[
+                                ("x-message-id", str(message.id).encode("utf-8")),
+                                ("x-trace-id", message.trace_id.encode("utf-8")),
+                            ],
                         )
                     )
                     message_ids.append(message.id)
