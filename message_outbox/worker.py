@@ -31,14 +31,18 @@ class MessageOutboxWorker:
                 message_ids = []
 
                 for message in messages:
+                    headers = [
+                        ("x-message-id", str(message.id).encode("utf-8")),
+                    ]
+
+                    if message.trace_id:
+                        headers.append(("x-trace-id", message.trace_id.encode("utf-8")))
+
                     send_message_tasks.append(
                         self.producer.send_and_wait(
                             message.topic,
                             dumps(message.payload),
-                            headers=[
-                                ("x-message-id", str(message.id).encode("utf-8")),
-                                ("x-trace-id", message.trace_id.encode("utf-8")),
-                            ],
+                            headers=headers,
                         )
                     )
                     message_ids.append(message.id)
