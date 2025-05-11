@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import get_logger
 
 from message_outbox.repositories import MessageOutboxRepository
+from message_outbox.schemas import KafkaMessageValueSchema
 
 logger = get_logger(__name__)
 
@@ -14,13 +15,12 @@ class MessageOutboxWorker:
         self.session = session
         self.producer = producer
         self.timeout = timeout
+        self.repository = MessageOutboxRepository(session)
 
     async def process_events(self) -> None:
-        outbox_repository = MessageOutboxRepository(self.session)
-
         logger.info("Starting event outbox worker")
         while True:
-            messages = await outbox_repository.get()
+            messages = await self.repository.get()
             if not messages:
                 await sleep(self.timeout)
                 continue
@@ -40,8 +40,11 @@ class MessageOutboxWorker:
                     send_message_tasks.append(
                         self.producer.send_and_wait(
                             topic=message.topic,
-                            value=message.payload.encode("utf-8"),
-                            key=message.event_type,
+                            value=KafkaMessageValueSchema(
+                                event_type=message.event_type, payload=message.payload
+                            )
+                            .model_dump_json()
+                            .encode("utf-8"),
                             headers=headers,
                         )
                     )
@@ -49,7 +52,7 @@ class MessageOutboxWorker:
 
                 await gather(*send_message_tasks)
 
-                await outbox_repository.batch_mark_processed(message_ids)
+                await self.repository.batch_mark_processed(message_ids)
                 await self.session.commit()
 
                 logger.info("Successfully sent messages", count=len(message_ids))
