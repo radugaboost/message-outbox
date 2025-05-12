@@ -18,52 +18,53 @@ class MessageOutboxWorker:
         timeout: int = 2,
     ) -> None:
         self.session_maker = session_maker
-        self.producer = producer
+        self.kafka_producer = producer
         self.timeout = timeout
 
     async def process_events(self) -> None:
         logger.info("Starting event outbox worker")
 
-        while True:
-            async with self.session_maker() as session:
-                repository = MessageOutboxRepository(session)
+        async with self.kafka_producer as producer:
+            while True:
+                async with self.session_maker() as session:
+                    repository = MessageOutboxRepository(session)
 
-                messages = await repository.get()
-                if not messages:
-                    await sleep(self.timeout)
-                    continue
+                    messages = await repository.get()
+                    if not messages:
+                        await sleep(self.timeout)
+                        continue
 
-                try:
-                    send_message_tasks = []
-                    message_ids = []
+                    try:
+                        send_message_tasks = []
+                        message_ids = []
 
-                    for message in messages:
-                        headers = [
-                            ("x-message-id", str(message.id).encode("utf-8")),
-                        ]
+                        for message in messages:
+                            headers = [
+                                ("x-message-id", str(message.id).encode("utf-8")),
+                            ]
 
-                        if message.trace_id:
-                            headers.append(("x-trace-id", message.trace_id.encode("utf-8")))
+                            if message.trace_id:
+                                headers.append(("x-trace-id", message.trace_id.encode("utf-8")))
 
-                        send_message_tasks.append(
-                            self.producer.send_and_wait(
-                                topic=message.topic,
-                                value=KafkaMessageValueSchema(
-                                    event_type=message.event_type, payload=message.payload
+                            send_message_tasks.append(
+                                producer.send_and_wait(
+                                    topic=message.topic,
+                                    value=KafkaMessageValueSchema(
+                                        event_type=message.event_type, payload=message.payload
+                                    )
+                                    .model_dump_json()
+                                    .encode("utf-8"),
+                                    headers=headers,
                                 )
-                                .model_dump_json()
-                                .encode("utf-8"),
-                                headers=headers,
                             )
-                        )
-                        message_ids.append(message.id)
+                            message_ids.append(message.id)
 
-                    await gather(*send_message_tasks)
+                        await gather(*send_message_tasks)
 
-                    await repository.batch_mark_processed(message_ids)
-                    await session.commit()
+                        await repository.batch_mark_processed(message_ids)
+                        await session.commit()
 
-                    logger.info("Successfully sent messages", count=len(message_ids))
-                except Exception as exc:
-                    await session.rollback()
-                    raise exc
+                        logger.info("Successfully sent messages", count=len(message_ids))
+                    except Exception as exc:
+                        await session.rollback()
+                        raise exc
