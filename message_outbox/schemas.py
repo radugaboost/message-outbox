@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -11,7 +12,7 @@ class MessageBaseSchema(BaseSchema):
     topic: str
     trace_id: str | None = None
     event_type: str
-    payload: str
+    payload: dict[str, Any]
 
 
 class MessageSchema(MessageBaseSchema):
@@ -20,4 +21,4 @@ class MessageSchema(MessageBaseSchema):
 
 class KafkaMessageValueSchema(BaseSchema):
     event_type: str
-    payload: str
+    payload: dict[str, Any]

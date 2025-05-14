@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "message-outbox"
-version = "0.0.8"
+version = "0.0.9"
 description = "Message outbox for SQLAlchemy"
 authors = ["Daniil Smirnov <skeal.smirnov2004@mail.ru>"]
 readme = "README.md"
